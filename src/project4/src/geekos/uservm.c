@@ -277,21 +277,18 @@ bool Copy_User_Page(pde_t * page_dir, uint_t dest_user, char * src, uint_t byte_
 int Alloc_User_Page(pde_t * pageDir,uint_t startAddress,uint_t sizeInMemory)
 {
 	uint_t pagedir_index=startAddress>>22;
-	uint_t page_index=(startAddress<<10)>>22;
+	uint_t page_index=(startAddress<<10)>>22;//获取线性地址的页表地址
 
 	pde_t * pagedir_entry=pageDir+pagedir_index;
 	pte_t * page_entry;
-
 //第一步，建立startAddress对应的页目录表项与页表
-
 //mydebug
- //Print("IN Alloc_User_Page,pageDirectory=%x\n", pageDir);
  Print("1 IN Alloc_User_Page,pagedir_entry=%x\n", pagedir_entry);
 
 //startAddress对应的页目录表项已经建立的情况
 	if(pagedir_entry->present)
 	{
-		page_entry=(pte_t *)(pagedir_entry->pageTableBaseAddr<<12);
+		page_entry=(pte_t *)(pagedir_entry->pageTableBaseAddr<<12);//4kb
 		Print("2 IN Alloc_User_Page,existed page_entry first=%x\n", page_entry);
 //mydebug
 //Print("IN Alloc_User_Page,page_entry=%x\n", page_entry);
@@ -312,24 +309,20 @@ int Alloc_User_Page(pde_t * pageDir,uint_t startAddress,uint_t sizeInMemory)
 		pagedir_entry->flags=VM_WRITE | VM_READ | VM_USER;
 		pagedir_entry->globalPage=0;
 		pagedir_entry->pageTableBaseAddr=(ulong_t)page_entry >> 12;
-//mydebug
+         //page_entry是页表的起始地址！！！
 		Print("2 IN Alloc_User_Page,new page_entry first=%x\n", page_entry);
 	}
 
 //找到页表中对应于startAddress的页表项
-	page_entry+=page_index;
-	Print("3 IN Alloc_User_Page,page_entry=%x\n", page_entry);
+	page_entry+=page_index;//page_entry是页表项起始的物理地址,相加线性地址的页表项才能得到正确的页表项的地址
+	Print("3 IN Alloc_User_Page,page_true=%x\n", page_entry);
 
 //第二步，建立startAddress对应的页表项与页
 	int num_pages;
 	void * page_addr;
 //这里算所需页数时，注意要对齐页边界
 	num_pages=Round_Up_To_Page(startAddress-Round_Down_To_Page(startAddress)+sizeInMemory)/PAGE_SIZE;
-
-//mydebug
-//Print("startAddress is %x,num_pages is %d/n",startAddress,num_pages);
-
-
+//sizeInMemory为应用需要的内存大小
 	int i;
 	uint_t first_page_addr=0;
 	for(i=0; i<num_pages; i++)
@@ -349,14 +342,17 @@ int Alloc_User_Page(pde_t * pageDir,uint_t startAddress,uint_t sizeInMemory)
 			page_entry->flags=VM_WRITE | VM_READ | VM_USER;
 			page_entry->globalPage = 0;
 			page_entry->pageBaseAddr = (ulong_t)page_addr>>12;
+	//将分配的页的物理地址右移12位，相当于除以4096，得到了分配的页的物理页号。
+	//page_entry->pageBaseAddr是页表项中的一个字段，它存储了分配的页的物理页号
 			KASSERT(page_addr!= 0);
 			if(i==0)
 			{
 				first_page_addr = (uint_t) page_addr;
 			}
-//mydebug
-		Print("4 IN Alloc_User_Page,phical  addr=%x\n", page_addr);
-		Print("5 IN Alloc_User_Page,liner addr=%x\n", startAddress);
+		
+		Print("4 IN Alloc_User_Page,liner addr=%x\n", startAddress);
+        Print("5 IN Alloc_User_Page,phical addr=%x\n", page_addr);
+        Print("-------------------------------------------\n");
 		}
 		page_entry++;
 		startAddress+=PAGE_SIZE;
