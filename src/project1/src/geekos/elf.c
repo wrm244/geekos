@@ -28,10 +28,13 @@
  * @return 0 if successful, < 0 on error
  */
 int Parse_ELF_Executable(char *exeFileData, ulong_t exeFileLength,struct Exe_Format *exeFormat)
-{
+{   //exeFileData——已装入内存的可执行文件所占用空间的起始地址
+    // exeFileLength——可执行文件长度
+     //exeFormat——保存分析得到的elf文件信息的结构体指针
     //TODO("Parse an ELF executable image");
      //利用ELF头部结构体指向可执行文件头部，便于获取相关信息*/
     //获取ELF文件头,程序头,可执行文件长度,代码段,数据段等信息,并填充Exe_Format数据结构的各值
+    
     elfHeader *ehdr = (elfHeader*)exeFileData; //ELF文件头结构体
     Set_Current_Attr(ATTRIB(BLACK, BLUE|BRIGHT));
     Print("e_ident:%x %c %c %c\n",ehdr->ident[0],ehdr->ident[1],ehdr->ident[2],ehdr->ident[3]);

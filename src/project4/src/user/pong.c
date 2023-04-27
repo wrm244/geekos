@@ -18,6 +18,9 @@ int main(int argc , char ** argv)
 
   for (i=0; i < 5; i++) {
        P(ping);
+       P(scr_sem);
+       Print("Pong\n");
+       V(scr_sem);
        for (j=0; j < 35; j++);
        V(pong);
   }

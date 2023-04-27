@@ -10,6 +10,8 @@
 
 #ifndef SEMA_H
 #define SEMA_H
+#define MAX_SEMAPHORE_NAME 25
+#define MAX_REGISTERED_THREADS 20
 
 int Create_Semaphore(const char *name, int ival);
 int P(int sem);

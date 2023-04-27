@@ -53,11 +53,11 @@ int main(int argc, char **argv)
     char *command;
 
     /* Set attribute to gray on black. */
-    Print_String("\x1B[37m");
+    Print("\x1B[37m");
 
     while (true) {
 	/* Print shell prompt (bright cyan on black background) */
-	Print_String("\x1B[1;36m$\x1B[37m ");
+	Print("\x1B[1;36m$\x1B[37m ");
 
 	/* Read a line of input */
 	Read_Line(commandBuf, sizeof(commandBuf));
@@ -84,6 +84,7 @@ int main(int argc, char **argv)
 	    continue;
 	} else if (strcmp(command, "") == 0) {
 	    /* Blank line. */
+		Print("Blank line.\n");
 	    continue;
 	}
 

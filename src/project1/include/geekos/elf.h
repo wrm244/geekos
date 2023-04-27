@@ -59,12 +59,12 @@ typedef struct {
  * It specifies a region of the executable file to be loaded
  * into memory.
  */
-struct Exe_Segment {
-    ulong_t offsetInFile;	 /* Offset of segment in executable file */
-    ulong_t lengthInFile;	 /* Length of segment data in executable file */
-    ulong_t startAddress;	 /* Start address of segment in user memory */
-    ulong_t sizeInMemory;	 /* Size of segment in memory */
-    int protFlags;		 /* VM protection flags; combination of VM_READ,VM_WRITE,VM_EXEC */
+struct Exe_Segment{
+    ulong_t offsetInFile;   //段在可执行文件中的偏移值
+    ulong_t lengthInFile;   //段在可执行文件中的长度 
+    ulong_t startAddress;   //段在内存中的起始地址 
+    ulong_t sizeInMemory;   //段在内存中的大小 
+    int protFlags;          //保护标志
 };
 
 /*
@@ -80,8 +80,8 @@ struct Exe_Segment {
  */
 struct Exe_Format {
     struct Exe_Segment segmentList[EXE_MAX_SEGMENTS]; /* Definition of segments */
-    int numSegments;		/* Number of segments contained in the executable */
-    ulong_t entryAddr;	 	/* Code entry point address */
+    int numSegments;		//定义了ELF文件中段的个数
+    ulong_t entryAddr;	 	//代码入口地址 
 };
 
 int Parse_ELF_Executable(char *exeFileData, ulong_t exeFileLength,

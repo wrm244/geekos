@@ -182,7 +182,8 @@ GENERRS := $(PERL) $(PROJECT_ROOT)/scripts/generrs
 
 # Flags used for all C source files
 GENERAL_OPTS := -O -Wall $(EXTRA_C_OPTS)
-CC_GENERAL_OPTS := $(GENERAL_OPTS) -O0
+CC_GENERAL_OPTS := $(GENERAL_OPTS) -Werror 
+#CC_GENERAL_OPTS := $(GENERAL_OPTS) -fno-stack-protector 
 
 # Flags used for kernel C source files
 CC_KERNEL_OPTS := -g -DGEEKOS -I$(PROJECT_ROOT)/include
@@ -251,9 +252,11 @@ fd_aug.img : geekos/fd_boot.bin geekos/setup.bin geekos/kernel.bin $(USER_PROGS)
 
 # First hard drive image (10 MB).
 # This contains a PFAT filesystem with the user programs on it.
+# For project >= 4, it also contains the paging file.
 diskc.img : $(USER_PROGS) $(BUILDFAT)
 	$(ZEROFILE) $@ 20480
-	$(BUILDFAT) $@ $(USER_PROGS)
+	$(ZEROFILE) pagefile.bin 2048
+	$(BUILDFAT) $@ $(USER_PROGS) pagefile.bin
 
 # Tool to build PFAT filesystem images
 $(BUILDFAT) : $(PROJECT_ROOT)/src/tools/buildFat.c $(PROJECT_ROOT)/include/geekos/pfat.h

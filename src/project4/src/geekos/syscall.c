@@ -20,8 +20,164 @@
 #include <geekos/user.h>
 #include <geekos/timer.h>
 #include <geekos/vfs.h>
-#include <geekos/synch.h>
+#include <libc/sema.h>
+#include <geekos/list.h>
 
+/*system call implementation functions*/
+#define MAX_LEN 25
+
+static struct Semaphore_List s_SemaphoreList;
+static int ID=0;
+
+
+struct Semaphore;
+/*master list of semphores*/
+DEFINE_LIST(Semaphore_List,Semaphore);
+
+struct Semaphore{
+     int semaphoreID;
+     char *semaphoreName;
+     int value;
+     int registeredThreadCount;
+     struct Kernel_Thread *registeredThreads[MAX_REGISTERED_THREADS];
+     struct Thread_Queue waitingThreads;
+     DEFINE_LINK(Semaphore_List,Semaphore);
+     };
+
+/*implement (expand macros) Semaphore List Functionality*/
+IMPLEMENT_LIST(Semaphore_List,Semaphore);
+
+int Semaphore_Create(char *semName,int initialValue)
+{ struct Kernel_Thread *current=g_currentThread;
+  struct Semaphore *s,*sem;
+  s=Get_Front_Of_Semaphore_List(&s_SemaphoreList);
+  while(s!=0)
+  { if(!strcmp(s->semaphoreName,semName)){ s->registeredThreads[s->registeredThreadCount]=current;
+                                  ++s->registeredThreadCount;
+                                  return s->semaphoreID;
+                                 }
+    s=Get_Next_In_Semaphore_List(s);
+  }
+  sem=Malloc(sizeof(struct Semaphore));
+  sem->registeredThreadCount=0;
+  sem->registeredThreads[sem->registeredThreadCount]=current;
+  ++sem->registeredThreadCount;
+  sem->semaphoreName=semName;
+  sem->value=initialValue;
+  sem->semaphoreID=ID;
+    ++ID;
+  Add_To_Back_Of_Semaphore_List(&s_SemaphoreList,sem);
+  Clear_Thread_Queue(&sem->waitingThreads);
+  return sem->semaphoreID;
+}
+
+int Semaphore_Acquire(int semID)
+{ struct Kernel_Thread *current=g_currentThread;
+  struct Semaphore *s;
+  int i;
+  s=Get_Front_Of_Semaphore_List(&s_SemaphoreList);
+  while(s!=0)
+  { if(s->semaphoreID==semID)
+               { for(i=0;i<s->registeredThreadCount;++i)
+                       {if(s->registeredThreads[i]==current)
+                          {         s->value--;
+                            if(s->value<0)Wait(&s->waitingThreads);
+                           
+                            return 0;
+                           }
+                        }
+                 if(i==s->registeredThreadCount)return -1;
+               }
+    s=Get_Next_In_Semaphore_List(s);
+   }
+ return -1;
+} 
+
+int Semaphore_Release(int semID)
+{ struct Kernel_Thread *current=g_currentThread;
+  struct Semaphore *s;
+  int i;
+  s=Get_Front_Of_Semaphore_List(&s_SemaphoreList);
+  while(s!=0)
+  { if(s->semaphoreID==semID)
+               { for(i=0;i<s->registeredThreadCount;++i)
+                       {if(s->registeredThreads[i]==current)
+                          {        s->value++;
+                            if(s->value<=0)Wake_Up_One(&s->waitingThreads);
+
+                            return 0;
+                           }
+                        }
+                 if(i==s->registeredThreadCount)return -1;
+               }
+    s=Get_Next_In_Semaphore_List(s);
+   }
+  return -1;
+} 
+
+int Semaphore_Destroy(int semID)
+{ struct Kernel_Thread *current=g_currentThread;
+  struct Semaphore *s;
+  int i,j;
+  s=Get_Front_Of_Semaphore_List(&s_SemaphoreList);
+  while(s!=0)
+  { if(s->semaphoreID==semID)
+                           {for(i=0;i<s->registeredThreadCount;++i)
+                                { if(s->registeredThreads[i]==current)
+                                       {for(j=i;j<s->registeredThreadCount;++j)
+                                             { s->registeredThreads[j]=s->registeredThreads[j+1];
+                                              }
+                                               --s->registeredThreadCount;
+                                              if(s->registeredThreadCount==0)
+                                                    { Remove_From_Semaphore_List(&s_SemaphoreList,s);
+                                                      Free(s);
+                                                      return 0;
+                                                     }
+                                        }
+                                  }
+                             if(i==s->registeredThreadCount)return -1;
+                             }
+      s=Get_Next_In_Semaphore_List(s);
+  }
+    return -1;
+}
+
+
+/*
+ * Allocate a buffer for a user string, and
+ * copy it into kernel space.
+ * Interrupts must be disabled.
+ */
+static int Copy_User_String(ulong_t uaddr, ulong_t len, ulong_t maxLen, char **pStr)
+{
+    int rc = 0;
+    char *str;
+
+    /* Ensure that string isn't too long. */
+    if (len > maxLen)
+	return EINVALID;
+
+    /* Allocate space for the string. */
+    str = (char*) Malloc(len+1);
+    if (str == 0) {
+	rc = ENOMEM;
+	goto done;
+    }
+
+    /* Copy data from user space. */
+    if (!Copy_From_User(str, uaddr, len)) {
+	rc = EINVALID;
+	Free(str);
+	goto done;
+    }
+    str[len] = '\0';
+
+    /* Success! */
+    *pStr = str;
+
+done:
+    return rc;
+}
 /*
  * Null system call.
  * Does nothing except immediately return control back
@@ -32,7 +188,7 @@
  * Returns:
  *   always returns the value 0 (zero)
  */
-static int Sys_Null(struct Interrupt_State *state)
+static int Sys_Null(struct Interrupt_State* state)
 {
     return 0;
 }
@@ -45,39 +201,10 @@ static int Sys_Null(struct Interrupt_State *state)
  * Returns:
  *   Never returns to user mode!
  */
-static int Sys_Exit(struct Interrupt_State *state)
+static int Sys_Exit(struct Interrupt_State* state)
 {
-    // TODO("Exit system call");
     Exit(state->ebx);
-}
-
-static int Copy_User_String(ulong_t uaddr, ulong_t len,
-                            ulong_t maxLen, char **pStr)
-{
-    int result = 0;
-    char *str;
-    /* 字符串超过最大长度 */
-    if (len > maxLen)
-        return EINVALID;
-    /* 为字符串分配内存空间 */
-    str = (char *)Malloc(len + 1);
-    if (str == 0)
-    {
-        return ENOMEM;
-        goto fail;
-    }
-    /* 从用户内存空间中复制字符串到系统内核空间 */
-    if (!Copy_From_User(str, uaddr, len))
-    {
-        result = EINVALID;
-        Free(str);
-        goto fail;
-    }
-    str[len] = '\0';
-    /* 拷贝成功 */
-    *pStr = str;
-fail:
-    return result;
+    /* We will never get here. */
 }
 
 /*
@@ -87,24 +214,25 @@ fail:
  *   state->ecx - number of characters to print
  * Returns: 0 if successful, -1 if not
  */
-static int Sys_PrintString(struct Interrupt_State *state)
+static int Sys_PrintString(struct Interrupt_State* state)
 {
-    // TODO("PrintString system call");
-    int result = 0;
-    uint_t length = state->ecx; //字符串长度
-    uchar_t *buf = 0;
-    if (length > 0)
-    {
-        /* 将字符串复制到系统内核空间 */
-        if (Copy_User_String(state->ebx, length, 1023, (char **)&buf) != 0)
-            goto done;
-        /* 输出字符串到控制台 */
-        Put_Buf(buf, length);
+    int rc = 0;
+    uint_t length = state->ecx;
+    char *buf = 0;
+
+    if (length > 0) {
+	/* Copy string into kernel. */
+	if ((rc = Copy_User_String(state->ebx, length, 1023, (char**) &buf)) != 0)
+	    goto done;
+
+	/* Write to console. */
+	Put_Buf(buf, length);
     }
+
 done:
-    if (buf != NULL)
-        Free(buf);
-    return result;
+    if (buf != 0)
+	Free(buf);
+    return rc;
 }
 
 /*
@@ -114,9 +242,8 @@ done:
  *   state - processor registers from user mode
  * Returns: the key code
  */
-static int Sys_GetKey(struct Interrupt_State *state)
+static int Sys_GetKey(struct Interrupt_State* state)
 {
-    // TODO("GetKey system call");
     return Wait_For_Key();
 }
 
@@ -126,10 +253,9 @@ static int Sys_GetKey(struct Interrupt_State *state)
  *   state->ebx - character attributes to use
  * Returns: always returns 0
  */
-static int Sys_SetAttr(struct Interrupt_State *state)
+static int Sys_SetAttr(struct Interrupt_State* state)
 {
-    // TODO("SetAttr system call");
-    Set_Current_Attr((uchar_t)state->ebx);
+    Set_Current_Attr((uchar_t) state->ebx);
     return 0;
 }
 
@@ -140,15 +266,13 @@ static int Sys_SetAttr(struct Interrupt_State *state)
  *   state->ecx - pointer to user int where column value should be stored
  * Returns: 0 if successful, -1 otherwise
  */
-static int Sys_GetCursor(struct Interrupt_State *state)
+static int Sys_GetCursor(struct Interrupt_State* state)
 {
-    // TODO("GetCursor system call");
-    /* 获取当前光标所在屏幕位置(行和列) */
     int row, col;
     Get_Cursor(&row, &col);
     if (!Copy_To_User(state->ebx, &row, sizeof(int)) ||
-        !Copy_To_User(state->ecx, &col, sizeof(int)))
-        return -1;
+	!Copy_To_User(state->ecx, &col, sizeof(int)))
+	return -1;
     return 0;
 }
 
@@ -159,9 +283,8 @@ static int Sys_GetCursor(struct Interrupt_State *state)
  *   state->ecx - new column value
  * Returns: 0 if successful, -1 otherwise
  */
-static int Sys_PutCursor(struct Interrupt_State *state)
+static int Sys_PutCursor(struct Interrupt_State* state)
 {
-    // TODO("PutCursor system call");
     return Put_Cursor(state->ebx, state->ecx) ? 0 : -1;
 }
 
@@ -174,40 +297,51 @@ static int Sys_PutCursor(struct Interrupt_State *state)
  *   state->esi - length of command string
  * Returns: pid of process if successful, error code (< 0) otherwise
  */
-static int Sys_Spawn(struct Interrupt_State *state)
+static int Sys_Spawn(struct Interrupt_State* state)
 {
-    // TODO("Spawn system call");
-    int res;           //程序返回值
-    char *program = 0; //进程名称
-    char *command = 0; //用户命令
+    
+    int rc;
+    char *program = 0;
+    char *command = 0;
     struct Kernel_Thread *process;
-    /* 复制程序名和命令字符串到用户内存空间 */
-    res = Copy_User_String(state->ebx, state->ecx, VFS_MAX_PATH_LEN, &program);
-    if (res != 0)
-    { //从用户空间复制进程名称
-        goto fail;
+
+    /* Copy program name and command from user space. */
+    if ((rc = Copy_User_String(state->ebx, state->ecx, VFS_MAX_PATH_LEN, &program)) != 0 ||
+	(rc = Copy_User_String(state->edx, state->esi, 1023, &command)) != 0)
+	goto done;
+
+    Enable_Interrupts();
+
+
+    /*
+     * Now that we have collected the program name and command string
+     * from user space, we can try to actually spawn the process.
+     */
+    
+//mydebug
+ Print("Spawn process %s \n", program);
+
+
+
+    rc = Spawn(program, command, &process);
+    if (rc == 0) {
+	KASSERT(process != 0);
+	rc = process->pid;
     }
-    res = Copy_User_String(state->edx, state->esi, 1023, &command);
-    if (res != 0)
-    { //从用户空间复制用户命令
-        goto fail;
-    }
-    /* 生成用户进程 */
-    Enable_Interrupts();                     //开中断
-    res = Spawn(program, command, &process); //得到进程名称和用户命令后便可生成一个新进程
-    if (res == 0)
-    { //若成功则返回新进程ID号
-        KASSERT(process != 0);
-        res = process->pid;
-    }
-    Disable_Interrupts(); //关中断
-fail:
+    Print("process %d moving to ready queue %d\n", process->pid, process->currentReadyQueue);
+    Print_Queues();
+     
+    Disable_Interrupts();
+
+done:
     if (program != 0)
-        Free(program);
+	Free(program);
     if (command != 0)
-        Free(command);
-    return res;
+	Free(command);
+
+    return rc;
 }
+
 /*
  * Wait for a process to exit.
  * Params:
@@ -215,19 +349,17 @@ fail:
  * Returns: the exit code of the process,
  *   or error code (< 0) on error
  */
-static int Sys_Wait(struct Interrupt_State *state)
+static int Sys_Wait(struct Interrupt_State* state)
 {
-    // TODO("Wait system call");
     int exitCode;
-    /* 查找需要等待的进程 */
     struct Kernel_Thread *kthread = Lookup_Thread(state->ebx);
-    /* 如果没有找到需要等待的进程，则返回错误代码 */
     if (kthread == 0)
-        return -1;
-    /* 等待指定进程结束 */
+	return -1;
+
     Enable_Interrupts();
     exitCode = Join(kthread);
     Disable_Interrupts();
+
     return exitCode;
 }
 
@@ -237,39 +369,27 @@ static int Sys_Wait(struct Interrupt_State *state)
  *   state - processor registers from user mode
  * Returns: the pid of the current thread
  */
-static int Sys_GetPID(struct Interrupt_State *state)
+static int Sys_GetPID(struct Interrupt_State* state)
 {
-    // TODO("GetPID system call");
     return g_currentThread->pid;
 }
 
-/**
- * 设置调度策略
+/*
  * Set the scheduling policy.
  * Params:
  *   state->ebx - policy,
  *   state->ecx - number of ticks in quantum
  * Returns: 0 if successful, -1 otherwise
  */
-static int Sys_SetSchedulingPolicy(struct Interrupt_State *state)
+static int Sys_SetSchedulingPolicy(struct Interrupt_State* state)
 {
-    // TODO("SetSchedulingPolicy system call");
-    /* 如果输入的优先级调度方法参数无效(非 0 或 1)则返回错误 */
-    if (state->ebx != ROUND_ROBIN && state->ebx != MULTILEVEL_FEEDBACK)
-    {
-        Print("Error! Scheduling Policy should be RR or MLF\n");
-        return -1;
-    }
-    /* 如果输入的时间片参数不在[1, 100]之间则返回错误 */
-    if (state->ecx < 1 || state->ecx > 100)
-    {
-        Print("Error! Quantum should be in the range of [1, 100]\n");
-        return -1;
-    }
-
-    int res = Chang_Scheduling_Policy(state->ebx, state->ecx);
-
-    return res;
+    int n,quantum;
+    n=state->ebx;
+    quantum=state->ecx;
+    if(n==0)Change_Scheduling_Policy(SCHED_RR,quantum);
+    else { if(n==1)Change_Scheduling_Policy(SCHED_MLF,quantum);
+              else return -1;}
+    return 0;
 }
 
 /*
@@ -279,9 +399,8 @@ static int Sys_SetSchedulingPolicy(struct Interrupt_State *state)
  *
  * Returns: value of the g_numTicks global variable
  */
-static int Sys_GetTimeOfDay(struct Interrupt_State *state)
+static int Sys_GetTimeOfDay(struct Interrupt_State* state)
 {
-    // TODO("GetTimeOfDay system call");
     return g_numTicks;
 }
 
@@ -293,38 +412,13 @@ static int Sys_GetTimeOfDay(struct Interrupt_State *state)
  *   state->edx - initial semaphore count
  * Returns: the global semaphore id
  */
-static int Sys_CreateSemaphore(struct Interrupt_State *state)
+static int Sys_CreateSemaphore(struct Interrupt_State* state)
 {
-    // TODO("CreateSemaphore system call");
-    int res;
-    ulong_t userAddr = state->ebx;  //信号量名字符串所在用户空间地址
-    ulong_t nameLen = state->ecx;   //信号量名长度
-    ulong_t initCount = state->edx; //信号量初始值
-    /* 如果传入参数不正确则返回错误 */
-    if (nameLen <= 0 || initCount < 0 || nameLen > MAX_SEMAPHORE_NAME)
-    {
-        Print("Error! Semaphore Params incorrect\n");
-        return EINVALID;
-    }
-
-    char *semName = NULL;
-    /* 从用户空间拷贝信号量名字符串到内核空间 */
-    res = Copy_User_String(userAddr, nameLen, MAX_SEMAPHORE_NAME, &semName);
-    if (res != 0)
-    {
-        Print("Error! Cannot copy string from user spcce\n");
-        return res;
-    }
-    /* 判断信号量名的合法性(中间是否含有'\0'字符) */
-    if (strnlen(semName, MAX_SEMAPHORE_NAME) != nameLen)
-    {
-        Print("Error! Semaphore Name is Invalid\n");
-        return EINVALID;
-    }
-    /* 创建一个信号量 */
-    res = Create_Semaphore(semName, nameLen, initCount);
-
-    return res;
+    char *semName=NULL;
+    int id;
+    Copy_User_String(state->ebx,state->ecx,MAX_LEN,&semName);
+    id=Semaphore_Create(semName,state->edx);
+    return id;
 }
 
 /*
@@ -336,16 +430,11 @@ static int Sys_CreateSemaphore(struct Interrupt_State *state)
  *
  * Returns: 0 if successful, error code (< 0) if unsuccessful
  */
-static int Sys_P(struct Interrupt_State *state)
+static int Sys_P(struct Interrupt_State* state)
 {
-    // TODO("P (semaphore acquire) system call");
-    int sid = state->ebx;
-    if (sid <= 0)
-    {
-        Print("Error! Semaphore ID is Invalid\n");
-        return EINVALID;
-    }
-    return P(sid);
+    int r,id=state->ebx;
+    r=Semaphore_Acquire(id);
+    return r;
 }
 
 /*
@@ -355,16 +444,11 @@ static int Sys_P(struct Interrupt_State *state)
  *
  * Returns: 0 if successful, error code (< 0) if unsuccessful
  */
-static int Sys_V(struct Interrupt_State *state)
+static int Sys_V(struct Interrupt_State* state)
 {
-    // TODO("V (semaphore release) system call");
-    int sid = state->ebx;
-    if (sid <= 0)
-    {
-        Print("Error! Semaphore ID is Invalid\n");
-        return EINVALID;
-    }
-    return V(sid);
+   int r,id=state->ebx;
+    r=Semaphore_Release(id);
+    return r;
 }
 
 /*
@@ -374,17 +458,13 @@ static int Sys_V(struct Interrupt_State *state)
  *
  * Returns: 0 if successful, error code (< 0) if unsuccessful
  */
-static int Sys_DestroySemaphore(struct Interrupt_State *state)
+static int Sys_DestroySemaphore(struct Interrupt_State* state)
 {
-    // TODO("DestroySemaphore system call");
-    int sid = state->ebx;
-    if (sid <= 0)
-    {
-        Print("Error! Semaphore ID is Invalid\n");
-        return EINVALID;
-    }
-    return Destroy_Semaphore(state->ebx);
+    int r, id=state->ebx;
+    r=Semaphore_Destroy(id);
+    return r;
 }
+
 
 /*
  * Global table of system call handler functions.

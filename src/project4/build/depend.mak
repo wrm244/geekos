@@ -105,11 +105,7 @@ geekos/synch.o: ../src/geekos/synch.c ../include/geekos/kthread.h \
   /usr/lib/gcc/i486-linux-gnu/3.4.6/include/stdbool.h \
   ../include/geekos/list.h ../include/geekos/kassert.h \
   ../include/geekos/screen.h ../include/geekos/int.h \
-  ../include/geekos/defs.h ../include/geekos/synch.h \
-  ../include/geekos/errno.h ../include/geekos/string.h \
-  ../include/geekos/../libc/string.h \
-  /usr/lib/gcc/i486-linux-gnu/3.4.6/include/stddef.h \
-  ../include/geekos/malloc.h
+  ../include/geekos/defs.h ../include/geekos/synch.h
 geekos/kthread.o: ../src/geekos/kthread.c ../include/geekos/kassert.h \
   ../include/geekos/screen.h ../include/geekos/ktypes.h \
   /usr/lib/gcc/i486-linux-gnu/3.4.6/include/stdbool.h \
@@ -148,7 +144,7 @@ geekos/uservm.o: ../src/geekos/uservm.c ../include/geekos/int.h \
   ../include/geekos/range.h ../include/geekos/vfs.h \
   ../include/geekos/fileio.h ../include/geekos/blockdev.h \
   ../include/geekos/user.h ../include/geekos/segment.h \
-  ../include/geekos/elf.h ../include/geekos/gdt.h
+  ../include/geekos/elf.h
 geekos/argblock.o: ../src/geekos/argblock.c ../include/geekos/ktypes.h \
   /usr/lib/gcc/i486-linux-gnu/3.4.6/include/stdbool.h \
   ../include/geekos/string.h ../include/geekos/../libc/string.h \
@@ -168,7 +164,7 @@ geekos/syscall.o: ../src/geekos/syscall.c ../include/geekos/syscall.h \
   ../include/geekos/paging.h ../include/geekos/bootinfo.h \
   ../include/geekos/timer.h ../include/geekos/vfs.h \
   ../include/geekos/fileio.h ../include/geekos/blockdev.h \
-  ../include/geekos/synch.h
+  ../include/libc/sema.h
 geekos/dma.o: ../src/geekos/dma.c ../include/geekos/screen.h \
   ../include/geekos/ktypes.h \
   /usr/lib/gcc/i486-linux-gnu/3.4.6/include/stdbool.h \
@@ -265,8 +261,7 @@ geekos/paging.o: ../src/geekos/paging.c ../include/geekos/string.h \
   ../include/geekos/gdt.h ../include/geekos/segment.h \
   ../include/geekos/user.h ../include/geekos/elf.h \
   ../include/geekos/vfs.h ../include/geekos/fileio.h \
-  ../include/geekos/blockdev.h ../include/geekos/crc32.h \
-  ../include/geekos/errno.h ../include/geekos/bitset.h
+  ../include/geekos/blockdev.h ../include/geekos/crc32.h
 geekos/main.o: ../src/geekos/main.c ../include/geekos/bootinfo.h \
   ../include/geekos/string.h ../include/geekos/../libc/string.h \
   /usr/lib/gcc/i486-linux-gnu/3.4.6/include/stddef.h \

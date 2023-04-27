@@ -48,6 +48,8 @@ static int s_spinCountPerTick;
  */
 int g_Quantum = DEFAULT_MAX_TICKS;
 
+extern int g_SchedPolicy;
+
 /*
  * Ticks per second.
  * FIXME: should set this to something more reasonable, like 100.
@@ -98,10 +100,15 @@ static void Timer_Interrupt_Handler(struct Interrupt_State* state)
 	 * The current process is moved to a lower priority queue,
 	 * since it consumed a full quantum.
 	 */
-        if (current->currentReadyQueue < (MAX_QUEUE_LEVEL - 1)) {
-            /*Print("process %d moved to ready queue %d\n", current->pid, current->currentReadyQueue); */
+       if(g_SchedPolicy==1)
+{if (current->currentReadyQueue < (MAX_QUEUE_LEVEL - 1)) {
+               
             current->currentReadyQueue++;
-        }
+  Print("process %d moved to ready queue %d\n", current->pid, current->currentReadyQueue);
+            
+            
+            }
+}
 
     }
 
