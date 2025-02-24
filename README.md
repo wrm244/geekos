@@ -10,6 +10,6 @@ See doc/hacking.pdf for information about GeekOS
 > 链接可能失效了，具体请向课程老师询问
 
 ## 教程
-请参考该网页上的详细教程：[点击到达页面](https://wrm244.gxist.cn/docs/category/os-course-design)
+请参考该网页上的详细教程：[点击到达页面](https://wrm244.gxist.cn/docs/geekos-project-0)
 ## LICENSE
 MIT © RM 100%
